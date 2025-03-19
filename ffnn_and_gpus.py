@@ -13,10 +13,13 @@ from torchvision.utils import make_grid
 import numpy as np
 import matplotlib.pyplot as plt 
 
+from pathlib import Path
+
+# Download datasets
 dataset = MNIST(root="data/", 
                 download=True, 
                 transform=ToTensor())  
-test_dataset = MNIST(root="data/", 
+test_ds = MNIST(root="data/", 
                      download=True, 
                      transform=ToTensor(), 
                      train=False)
@@ -384,20 +387,36 @@ def predict_image(img, model):
     return preds[0].item() 
 
 """Let's try it out with a few images""" 
-img, label = test_dataset[0] 
+img, label = test_ds[0] 
 plt.figure() 
 plt.imshow(img[0], cmap="gray")
 plt.title(f"Label: {label} | Predicted: {predict_image(img, model)}") 
 
-img, label = test_dataset[1839] 
+img, label = test_ds[1839] 
 plt.figure() 
 plt.imshow(img[0], cmap="gray")
 plt.title(f"Label: {label} | Predicted: {predict_image(img, model)}")
 
 
-img, label = test_dataset[193] 
+img, label = test_ds[193] 
 plt.figure() 
 plt.imshow(img[0], cmap="gray")
 plt.title(f"Label: {label} | Predicted: {predict_image(img, model)}")
-plt.show()
+#plt.show()
+
+"""Finally let's also look at the model's loss and accuracy on the test data"""
+test_dl = DeviceDataLoader(DataLoader(test_ds, batch_size=256), device) 
+result = evaluate(model, test_dl) 
+print(result) 
+
+"""We expect this to be similar to the accuracy/loss on the validation set. If not, 
+we might need a better validation set that has similar data and distribution as the test set 
+(which comes from real world data)""" 
+
+"""Save Model"""
+SAVE_PATH = Path("models/") 
+SAVE_PATH.mkdir(parents=True, exist_ok=True) 
+MODEL_NAME = "mnist_feedforward.pth" 
+MODEL_SAVE_PATH = SAVE_PATH/MODEL_NAME 
+torch.save(model.state_dict(), MODEL_SAVE_PATH) 
 
