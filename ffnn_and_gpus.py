@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn 
 import torch.nn.functional as F
 from torch.utils.data import DataLoader 
-from torch.utils.data import random_split
+from torch.utils.data import random_split 
+from torchinfo import summary
 
 
 from torchvision.datasets import MNIST
@@ -10,7 +11,6 @@ from torchvision.transforms import ToTensor
 from torchvision.utils import make_grid 
 
 import numpy as np
-
 import matplotlib.pyplot as plt 
 
 dataset = MNIST(root="data/", 
@@ -119,8 +119,99 @@ for images, labels in train_dl:
     followed by a non-linear actibvvation(using F.relu), followed by another linear transformation (using layer2). 
     Let's verify this by recomputing the outputs using basic matrix operations"""
 
-    # Expanded vrsion of layer2(F.relu(layer1(inputs))) 
+    # Expanded version of layer2(F.relu(layer1(inputs))) 
     outputs = (F.relu(inputs @ layer1.weight.t() + layer1.bias)) @ layer2.weight.t() + layer2.bias 
 
-    print(torch.allclose(layer2_outputs, outputs, 1e-3))
-    break 
+    # print(torch.allclose(layer2_outputs, outputs, 1e-3)) True 
+
+    """If we had not included a non-linear activation between the two linear layers, the final relationship 
+    between inputs and outputs would be linear. A simple refactoring of computations illustrates this"""
+    # Same as layer2(layer1(inputs))  
+    outputs2 = (inputs @ layer1.weight.t() + layer1.bias) @ layer2.weight.t() + layer2.bias 
+
+    # Create a single layer to replace the two linear layers 
+    combined_layer = nn.Linear(input_size, output_size)
+    combined_layer.weight.data = layer2.weight @ layer1.weight 
+    combined_layer.bias.data = layer1.bias @ layer2.weight.t() + layer2.bias
+
+    # Same as combined_layer(inputs) 
+    outputs3 = inputs @ combined_layer.weight.t() + combined_layer.bias 
+    #print(torch.allclose(outputs2, outputs3, 1e-3))
+    break  
+
+"""Let's define the accuracy function"""
+def accuracy(outputs, y_true): 
+    """Compute the model's accuracy. It is used in validation step"""
+    y_preds = torch.argmax(outputs, dim=1) 
+    return torch.tensor(torch.sum(y_preds == y_true).item() / len(y_true))
+"""Model
+We are now ready to define our model. As discussed above, we'll create a neural network with 
+one hidden laye. Here's what that means:
+* Instead of using a single nn.Linear object to transform a batch of inputs (pixel intensities)
+into outputs (class probabilities). We'lluse two nn.Linear objects. Each of these is 
+called a layer in the network. 
+* The first layers (also know as the hidden layer) will transform the input matrix of shape batch_size x 784
+into an intermediate output matrix of shape batch_size x hidden_size. The parameter hidden_size
+can be configured manually (e.g 32 or 64). 
+* We'll then apply a non-linear activation function to the intermediate outputs. The activation 
+function transforms the individual elements in the matrix. 
+* The result of the activation function, which is also of the size batch_size x hidden_size, is passed into 
+the second layer (also known as the output layer). The second layer transforms it into a matrix of size
+batch_size x 10. We can use this output to compute the loss and adjust weights using gradient descent. 
+
+Let's define the model by extending the nn.Module class of PyTOrch
+"""
+class MnistModel(nn.Module): 
+    """Feedforward neural network with 1 hidden layer""" 
+    def __init__(self, in_size: int, hidden_size: int, out_size: int):
+        super().__init__() 
+        # hidden layer 
+        self.linear1 = nn.Linear(in_size, hidden_size)
+        # output layer 
+        self.linear2 = nn.Linear(hidden_size, out_size) 
+
+    def forward(self, xb) -> torch.Tensor: 
+        # Flatten the image tensors 
+        xb = xb.view(xb.size(0), -1)  # Flatten tensors
+        # Get intermediate outputs using hidden layer 
+        out = self.linear1(xb)
+        # Apply activation functio 
+        out = F.relu(out) 
+        # Get predictions using output layer 
+        out = self.linear2(out) 
+
+    def training_step(self, batch): 
+        images, labels = batch 
+        out = self(images)                 # Generates predictions
+        loss = F.cross_entropy(out, labels) # Calcualate loss
+        return loss 
+    
+    def validation_step(self, batch): 
+        images, labels = batch 
+        out = self(images)                     # Generate predictions
+        loss = F.cross_entropy(out, labels) 
+        acc = accuracy(out, labels) 
+        return {"val_loss": loss, "val_acc": acc}  
+    
+    def validation_epoch_end(self, ouputs): 
+        batch_losses = [x["val_loss"] for x in outputs] 
+        epoch_loss = torch.stack(batch_losses).mean() # Combnine losses
+        batch_accs= [x['val_acc'] for x in outputs]  
+        epoch_acc = torch.stack(batch_accs).mean() # Combine accuracies 
+        return {"val_loss": epoch_loss.item(), "val_acc": epoch_acc.item()} 
+    
+    def epoch_end(self, epoch, result): 
+        print(f"Epoch: {epoch+1} | val_loss: {result["val_loss"]: .4f} | val_acc: {result["val_acc"]: .4f}")
+INPUT_SIZE = 784 
+HIDDEN_SIZE = 32 
+NUM_CLASSES = len(dataset.classes) 
+
+model = MnistModel(INPUT_SIZE, HIDDEN_SIZE, NUM_CLASSES) 
+
+"""Let's look at a summary of our model"""
+print(summary(model))
+
+"""Let's look at the model's parameters. We'll expect to see one weight and bias matrix for each of the 
+layers"""
+for t in model.parameters(): 
+    print(t.shape)
