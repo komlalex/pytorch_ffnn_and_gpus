@@ -366,4 +366,38 @@ plt.plot(accs, "-x")
 plt.xlabel("epoch")
 plt.ylabel("accuracy") 
 plt.title("Accuracy vs. No. of epochs") 
+#plt.show()
+
+"""Our current model outperforms the logistic regression model (which could only achieve around 90%) by 
+a considerable margin. To improve further, we need to make the model more powerful 
+by increasing the hidden layers's size or adding more hidden layers with 
+activations. """
+
+"""Testing individual images 
+While we have been tracking the overall accuracy of a model for far, it's also
+a good idea to look at the model's results on some sample images. Let's test out our 
+model with some images from the pre-defined test dataset of 10_000 images.""" 
+def predict_image(img, model): 
+    xb = to_device(img.unsqueeze(0), device) 
+    yb = model(xb) 
+    preds = torch.argmax(yb, dim=1)  
+    return preds[0].item() 
+
+"""Let's try it out with a few images""" 
+img, label = test_dataset[0] 
+plt.figure() 
+plt.imshow(img[0], cmap="gray")
+plt.title(f"Label: {label} | Predicted: {predict_image(img, model)}") 
+
+img, label = test_dataset[1839] 
+plt.figure() 
+plt.imshow(img[0], cmap="gray")
+plt.title(f"Label: {label} | Predicted: {predict_image(img, model)}")
+
+
+img, label = test_dataset[193] 
+plt.figure() 
+plt.imshow(img[0], cmap="gray")
+plt.title(f"Label: {label} | Predicted: {predict_image(img, model)}")
 plt.show()
+
