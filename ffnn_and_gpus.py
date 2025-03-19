@@ -194,7 +194,7 @@ class MnistModel(nn.Module):
         acc = accuracy(out, labels) 
         return {"val_loss": loss, "val_acc": acc}  
     
-    def validation_epoch_end(self, ouputs): 
+    def validation_epoch_end(self, outputs): 
         batch_losses = [x["val_loss"] for x in outputs] 
         epoch_loss = torch.stack(batch_losses).mean() # Combnine losses
         batch_accs= [x['val_acc'] for x in outputs]  
@@ -262,9 +262,9 @@ def to_device(data, device):
     return data.to(device, non_blocking=True) 
 
 for images, labels in train_dl: 
-    print(images.shape) 
+    #print(images.shape) 
     images = to_device(images, device) 
-    print(images.device) 
+    #print(images.device) 
     break 
 
 """Finally, we define a DeviceDataLoader class to wrp our existing data loaders and move batches of data 
@@ -285,6 +285,18 @@ class DeviceDataLoader():
     def __len__(self): 
         """Number of batches"""
         return len(self.dl)
+    
+"""The yeild keyword in python is used to create a generator function that can be used within a for loop, as 
+illustrated below"""
+def some_numbers(): 
+    yield 10
+    yield 20 
+    yield 30  
+
+for value in some_numbers(): 
+    #print(value)
+    pass
+
 
 """We can now wrap our data loaders using DeviceDataLoader""" 
 train_dl = DeviceDataLoader(train_dl, device) 
@@ -293,6 +305,65 @@ val_dl = DeviceDataLoader(val_dl, device)
 """Tensors moved to the GPU have a device property which includes the word cuda. Let's verify this by 
 looking at a batch of val_dl"""
 for xb, yb in val_dl: 
-    print(f"xb device: {xb.device}")
-    print(f"yb: {yb}")
+    #print(f"xb device: {xb.device}")
+    #print(f"yb: {yb}")
     break 
+
+"""Training the Model
+We'll define two functions: fir and evaluate to train the model using gradient descent and evaluate 
+its performace on the validation set."""
+def evaluate(model, val_dl): 
+    """Evaluate the model's performance on the validation set"""
+    outputs = [model.validation_step(batch) for batch in val_dl] 
+    return model.validation_epoch_end(outputs) 
+
+def fit(epochs, lr, model: nn.Module, train_dl, val_dl, opt_func=torch.optim.SGD):
+    """Train the model using gradient descent"""
+    history = [] 
+    optimizer = opt_func(model.parameters(), lr)
+    for epoch in range(epochs): 
+        "Training phase" 
+        for batch in train_dl: 
+            loss = model.training_step(batch) 
+            loss.backward() 
+            optimizer.step() 
+            optimizer.zero_grad() 
+        
+        # Validation phase 
+        result = evaluate(model, val_dl) 
+        model.epoch_end(epoch, result) 
+        history.append(result)
+    return history
+
+"""Before we train the model, we need to ensure that the data and the model's parameters (weights and biases) 
+are on the same device (CPU or GPU). We can reuse the to_device function to move the model's parameters to the right 
+device"""
+
+# Model (on GPU) 
+model = MnistModel(INPUT_SIZE, HIDDEN_SIZE, NUM_CLASSES)
+to_device(model, device) 
+
+"""Let's see how the model performs on the validation set with the initial set of weights"""
+history = [evaluate(model, val_dl)] 
+print(history)
+
+"""Let's train the model for five epochs and look at the result"""
+history = fit(7, 0.5, model, train_dl, val_dl) 
+
+"""Let's plot the losses and accuracies to study how the model improves"""
+losses = [x["val_loss"] for x in history]
+accs = [x["val_acc"] for x in history] 
+
+plt.figure(figsize=(10, 10))
+plt.subplot(1,2, 1) 
+plt.plot(losses, "-x")
+plt.xlabel("epoch")
+plt.ylabel("loss") 
+plt.title("Loss vs No. of epochs")
+
+plt.subplot(1, 2, 2) 
+plt.plot(accs, "-x") 
+plt.xlabel("epoch")
+plt.ylabel("accuracy") 
+plt.title("Accuracy vs. No. of epochs") 
+plt.show()
