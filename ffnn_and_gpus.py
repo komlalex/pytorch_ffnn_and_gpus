@@ -33,8 +33,25 @@ image, label = dataset[10]
 plt.figure(figsize=(10, 10))
 plt.imshow(image[0], cmap="gray") 
 plt.title(f"Label: {label}")
-plt.show() 
+#plt.show() 
 
 """Next, let's use random_split helper function to set aside 10_000 images for our validation set"""
-train_ds, val_ds = random_split(dataset, [50_000, 10_000]) 
-print(len(train_ds))
+VAL_SIZE = 10_000
+TRAIN_SIZE = len(dataset) - VAL_SIZE
+train_ds, val_ds = random_split(dataset, [TRAIN_SIZE, VAL_SIZE])  
+
+"""We can now create PyTorch data loaders for the training and validation dataset"""
+BATCH_SIZE = 128
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+val_dl = DataLoader(val_ds, batch_size=BATCH_SIZE*2, pin_memory=True)
+
+"""Let's visualize a batch of data in a grid using the make_grid function from torchvision. We'll use the 
+.permute method on the tensor to move the color channels to the last dimension, as expected by matplotlib"""
+for images, _ in train_dl: 
+    print(f"Images shape: {images.shape}")
+    plt.figure(figsize=(16, 8))
+    plt.axis(False) 
+    plt.imshow(make_grid(images, nrow=16).permute((1, 2, 0)))
+    break 
+
+plt.show()
