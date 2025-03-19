@@ -178,7 +178,8 @@ class MnistModel(nn.Module):
         # Apply activation functio 
         out = F.relu(out) 
         # Get predictions using output layer 
-        out = self.linear2(out) 
+        out = self.linear2(out)  
+        return out
 
     def training_step(self, batch): 
         images, labels = batch 
@@ -201,7 +202,7 @@ class MnistModel(nn.Module):
         return {"val_loss": epoch_loss.item(), "val_acc": epoch_acc.item()} 
     
     def epoch_end(self, epoch, result): 
-        print(f"Epoch: {epoch+1} | val_loss: {result["val_loss"]: .4f} | val_acc: {result["val_acc"]: .4f}")
+        print(f"\33[32m Epoch: {epoch+1} | val_loss: {result["val_loss"]: .4f} | val_acc: {result["val_acc"]: .4f}")
 INPUT_SIZE = 784 
 HIDDEN_SIZE = 32 
 NUM_CLASSES = len(dataset.classes) 
@@ -209,9 +210,89 @@ NUM_CLASSES = len(dataset.classes)
 model = MnistModel(INPUT_SIZE, HIDDEN_SIZE, NUM_CLASSES) 
 
 """Let's look at a summary of our model"""
-print(summary(model))
+#print(summary(model))
 
 """Let's look at the model's parameters. We'll expect to see one weight and bias matrix for each of the 
 layers"""
 for t in model.parameters(): 
-    print(t.shape)
+    #print(t.shape)
+    pass 
+
+"""Let's try and generate some inputs using our model. We'll take the first batch of 128 images 
+from our dataset and pass them into the model"""
+
+for images, labels in train_dl: 
+    outputs = model(images)
+    loss = F.cross_entropy(outputs, labels) 
+    #print(f"Loss: {loss.item()}")  
+    #print(f"Output shape: {outputs.shape}")
+    #print(f"Sample outputs: \n {outputs[:2].data}")
+    break 
+
+"""Using GPUs
+As the sizes of our model and datasets increases, we need to use GPUs to train our models with 
+a measurable amount of time. GPUs contain hundreds of cores optimized for performing expensive 
+matrix operations on floating-point numbers quickly, making them ideal for training deep neural 
+networks.
+
+We can check if a GPU is available and the required NVIDIA CUDA drivers are installed using 
+torch.cuda.is_available 
+"""
+
+#print(torch.cuda.is_available()) 
+
+"""Let's define a helper function to ensure that our code uses the GPU if it is available 
+and defaults to using the CPU  if it isn't"""
+
+def get_default_device(): 
+    """Pick GPU if available, else CPU""" 
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    else: 
+        return torch.device("cpu") 
+
+device = get_default_device() 
+
+"""Next, let's define a function that can move data and model to a chosen device"""
+
+def to_device(data, device): 
+    """Move tensor(s) to a chosen device""" 
+    if isinstance(data, (list, tuple)): 
+        return [to_device(x, device) for x in data] 
+    return data.to(device, non_blocking=True) 
+
+for images, labels in train_dl: 
+    print(images.shape) 
+    images = to_device(images, device) 
+    print(images.device) 
+    break 
+
+"""Finally, we define a DeviceDataLoader class to wrp our existing data loaders and move batches of data 
+to the selected device. Interestingly, we don't need to extend an existing class to create a 
+data loader. A ll we need is an __iter__ method to retrieve batches of data of an __len__ method to the number of 
+batches"""
+class DeviceDataLoader(): 
+    """Wrap a dataloader to move data to a device"""
+    def __init__(self, dl, device):
+        self.dl = dl
+        self.device = device 
+
+    def __iter__(self): 
+        """Yield a batch of data after moving it to device"""
+        for b in self.dl: 
+            yield to_device(b, self.device) 
+
+    def __len__(self): 
+        """Number of batches"""
+        return len(self.dl)
+
+"""We can now wrap our data loaders using DeviceDataLoader""" 
+train_dl = DeviceDataLoader(train_dl, device) 
+val_dl = DeviceDataLoader(val_dl, device) 
+
+"""Tensors moved to the GPU have a device property which includes the word cuda. Let's verify this by 
+looking at a batch of val_dl"""
+for xb, yb in val_dl: 
+    print(f"xb device: {xb.device}")
+    print(f"yb: {yb}")
+    break 
